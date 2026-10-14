@@ -229,6 +229,27 @@ resources:
         key: tag
 
 rpc:
+  - name: Leases
+    filename: leases
+    customTypes:
+      Lease:
+        - {name: Address, type: string, key: address}
+        - {name: MAC, type: string, key: hwaddr}
+        - {name: Hostname, type: string, key: hostname}
+        - {name: Interface, type: string, key: if}
+        - {name: Expires, type: "*api.Int64", key: expire}
+        - {name: LeaseType, type: string, key: lease_type}
+      LeaseSearchResult:
+        - {name: Total, type: "*api.Int64", key: total}
+        - {name: Rows, type: "[]Lease", key: rows}
+    rpc_calls:
+      - name: Search
+        method: GET
+        endpoint: /dnsmasq/leases/search
+        params:
+          - {name: rowCount, key: rowCount, optional: true, queryParameter: true}
+          - {name: current, key: current, optional: true, queryParameter: true}
+        result_type: LeaseSearchResult
   - name: Search
     filename: search
     rpc_calls:

@@ -1,6 +1,58 @@
 ---
 name: diagnostics
 reconfigureEndpoint: "" # Controller-wide reconfigure endpoint (can be overwritten)
+rpc:
+  - name: Interface
+    filename: interface_neighbors
+    customTypes:
+      ARPEntry:
+        - name: IP
+          type: string
+          key: ip
+        - name: MAC
+          type: string
+          key: mac
+        - name: Manufacturer
+          type: string
+          key: manufacturer
+        - name: Interface
+          type: string
+          key: intf
+        - name: InterfaceDescription
+          type: string
+          key: intf_description
+        - name: Hostname
+          type: string
+          key: hostname
+      NDPEntry:
+        - name: IP
+          type: string
+          key: ip
+        - name: MAC
+          type: string
+          key: mac
+        - name: Manufacturer
+          type: string
+          key: manufacturer
+        - name: Interface
+          type: string
+          key: intf
+        - name: InterfaceDescription
+          type: string
+          key: intf_description
+    rpc_calls:
+      - name: GetARP
+        method: GET
+        endpoint: /diagnostics/interface/get_arp
+        params:
+          - name: resolve
+            optional: true
+            queryParameter: true
+        result_type: "[]ARPEntry"
+      - name: GetNDP
+        method: GET
+        endpoint: /diagnostics/interface/get_ndp
+        result_type: "[]NDPEntry"
 resources:
   # diagnostics resources
 

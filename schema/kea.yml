@@ -213,6 +213,38 @@ resources:
         key: description
 
 rpc:
+  - name: Leases
+    filename: leases
+    customTypes:
+      Lease:
+        - {name: Address, type: string, key: address}
+        - {name: MAC, type: string, key: hwaddr}
+        - {name: Hostname, type: string, key: hostname}
+        - {name: Interface, type: string, key: if}
+        - {name: InterfaceName, type: string, key: if_name}
+        - {name: SubnetID, type: "*api.Int64", key: subnet_id}
+        - {name: Expires, type: "*api.Int64", key: expire}
+        - {name: State, type: "*api.Int64", key: state}
+        - {name: LeaseType, type: string, key: lease_type}
+        - {name: DUID, type: string, key: duid}
+      LeaseSearchResult:
+        - {name: Total, type: "*api.Int64", key: total}
+        - {name: Rows, type: "[]Lease", key: rows}
+    rpc_calls:
+      - name: SearchV4
+        method: GET
+        endpoint: /kea/leases4/search
+        params:
+          - {name: rowCount, key: rowCount, optional: true, queryParameter: true}
+          - {name: current, key: current, optional: true, queryParameter: true}
+        result_type: LeaseSearchResult
+      - name: SearchV6
+        method: GET
+        endpoint: /kea/leases6/search
+        params:
+          - {name: rowCount, key: rowCount, optional: true, queryParameter: true}
+          - {name: current, key: current, optional: true, queryParameter: true}
+        result_type: LeaseSearchResult
   - name: "Settings"
     filename: settings
     customTypes:

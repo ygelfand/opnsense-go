@@ -113,7 +113,7 @@ func GetFilter[K any](c *Client, ctx context.Context, opts ReqOpts, resource *K,
 	}
 
 	// Find key in returned list
-	for i, _ := range reqData {
+	for i := range reqData {
 		if i == key {
 			if err := json.Unmarshal(reqData[i], resource); err != nil {
 				return nil, err

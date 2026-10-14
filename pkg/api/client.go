@@ -26,6 +26,12 @@ const (
 	clientMaxRetries = 4
 )
 
+// DefaultMaxResponseBytes bounds decoded API responses to eight MiB.
+const DefaultMaxResponseBytes int64 = 8 << 20
+
+// ErrResponseTooLarge identifies an API response exceeding its configured limit.
+var ErrResponseTooLarge = errors.New("API response exceeds configured limit")
+
 var clientMutexKey = "OPNSENSE"
 
 type Client struct {
@@ -45,6 +51,15 @@ type Options struct {
 	MaxRetries int64
 
 	Logger *log.Logger
+
+	// HTTPClient supplies transport, TLS trust, timeout, and redirect policy.
+	HTTPClient *http.Client
+	// MaxResponseBytes limits response bodies; zero selects the default limit.
+	MaxResponseBytes int64
+	// SuppressBodyLogging keeps request/response payloads out of debug logs.
+	SuppressBodyLogging bool
+	// DisableRetries delegates retry policy to the caller, including writes.
+	DisableRetries bool
 }
 
 func NewClient(options Options) *Client {
@@ -58,9 +73,13 @@ func NewClient(options Options) *Client {
 	}
 
 	// Configure HTTP client
-	client.client.HTTPClient.Transport = &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: options.AllowInsecure},
+	if options.HTTPClient != nil {
+		client.client.HTTPClient = options.HTTPClient
+	} else {
+		client.client.HTTPClient.Transport = &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: options.AllowInsecure},
+		}
 	}
 
 	//   Set defaults for retries
@@ -77,6 +96,9 @@ func NewClient(options Options) *Client {
 	}
 	if options.MaxRetries != 0 {
 		client.client.RetryMax = int(options.MaxRetries)
+	}
+	if options.DisableRetries {
+		client.client.RetryMax = 0
 	}
 
 	return client
@@ -128,18 +150,31 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	reqCopy := req.Clone(req.Context())
 	reqCopy.Header.Set("Authorization", "****************")
 
-	dReq, _ := httputil.DumpRequest(reqCopy, true)
-	logger.Println(fmt.Sprintf("\n%s\n", string(dReq)))
+	dReq, _ := httputil.DumpRequest(reqCopy, !c.opts.SuppressBodyLogging)
+	logger.Printf("\n%s\n", dReq)
 
 	// Do request
 	res, err := c.client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() // Cleanup after bounded response consumption.
+	limit := c.opts.MaxResponseBytes
+	if limit <= 0 {
+		limit = DefaultMaxResponseBytes
+	}
+	data, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) > limit {
+		return fmt.Errorf("%w: %d bytes", ErrResponseTooLarge, limit)
+	}
 
 	// Log response
-	dRes, _ := httputil.DumpResponse(res, true)
+	resCopy := *res
+	resCopy.Body = io.NopCloser(bytes.NewReader(data))
+	dRes, _ := httputil.DumpResponse(&resCopy, !c.opts.SuppressBodyLogging)
 	logger.Println(ctx, fmt.Sprintf("\n%s\n", string(dRes)))
 
 	// Check for 200
@@ -148,7 +183,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	}
 
 	// Unmarshal resp JSON data to struct
-	err = json.NewDecoder(res.Body).Decode(resp)
+	err = json.Unmarshal(data, resp)
 	if err != nil {
 		return err
 	}
